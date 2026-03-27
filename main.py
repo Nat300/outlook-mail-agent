@@ -1,4 +1,4 @@
-import msal,os
+import msal,os,requests
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -35,6 +35,35 @@ def get_access_token():
     else:
         raise Exception(f"Authentication failed: {result.get('error_description')}")
 
-# Run it
+
+def get_emails(token):
+    # The Microsoft Graph API endpoint for inbox messages
+    url = "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages"
+    
+    # We pass the token in the request header to prove we're authenticated
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    # Only fetch 10 emails for now, and only the fields we need
+    params = {
+        "$top": 10,
+        "$select": "subject,from,receivedDateTime,bodyPreview"
+    }
+    
+    response = requests.get(url, headers=headers, params=params)
+    
+    if response.status_code == 200:
+        emails = response.json()["value"]
+        print(f"Fetched {len(emails)} emails")
+        for email in emails:
+            print(f"\nFrom: {email['from']['emailAddress']['address']}")
+            print(f"Subject: {email['subject']}")
+            print(f"Preview: {email['bodyPreview'][:100]}")
+    else:
+        print(f"Error: {response.status_code} - {response.text}")
+
+
 token = get_access_token()
-print(f"Token received: {token[:20]}...")
+get_emails(token)

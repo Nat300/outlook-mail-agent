@@ -1,7 +1,10 @@
-import msal
+import msal,os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Your app's credentials from the Azure portal
-CLIENT_ID = "YOUR_CLIENT_ID_HERE"
+CLIENT_ID = os.getenv("CLIENT_ID")
 TENANT_ID = "consumers"
 
 # What permissions we're requesting

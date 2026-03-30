@@ -1,5 +1,6 @@
 import msal,os,requests,anthropic
 from dotenv import load_dotenv
+from datetime import datetime, timezone, timedelta
 
 load_dotenv()
 
@@ -55,7 +56,6 @@ def get_access_token():
     else:
         raise Exception(f"Authentication failed: {result.get('error_description')}")
 
-
 def get_emails(token):
     # The Microsoft Graph API endpoint for inbox messages
     url = "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages"
@@ -66,9 +66,9 @@ def get_emails(token):
         "Content-Type": "application/json"
     }
     
-    # Only fetch 10 emails for now, and only the fields we need
+    # Only fetch 50 emails for now, and only the fields we need
     params = {
-        "$top": 10,
+        "$top": 50,
         "$select": "subject,from,receivedDateTime,bodyPreview"
     }
     
@@ -82,8 +82,45 @@ def get_emails(token):
         print(f"Error: {response.status_code} - {response.text}")
         return []
 
-        
+def delete_old_emails(token, folder_ids, categories_to_clean, weeks_old=8):
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
 
+    # Calculate the cutoff date (8 weeks = 2 months)
+    cutoff = datetime.now(timezone.utc) - timedelta(weeks=weeks_old)
+    cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    total_deleted = 0
+
+    for category in categories_to_clean:
+        folder_id = folder_ids.get(category)
+        if not folder_id:
+            continue
+
+        # Fetch emails older than the cutoff date in this folder
+        url = f"https://graph.microsoft.com/v1.0/me/mailFolders/{folder_id}/messages"
+        params = {
+            "$filter": f"receivedDateTime lt {cutoff_str} and flag/flagStatus eq 'notFlagged'",
+            "$select": "id,subject,receivedDateTime",
+            "$top": 50
+        }
+
+        response = requests.get(url, headers=headers, params=params)
+        emails = response.json().get("value", [])
+
+        for email in emails:
+            delete_url = f"https://graph.microsoft.com/v1.0/me/messages/{email['id']}"
+            delete_response = requests.delete(delete_url, headers=headers)
+
+            if delete_response.status_code == 204:
+                total_deleted += 1
+                print(f"🗑️ Deleted: '{email['subject']}' from {category} received on {email['receivedDateTime']}")
+            else:
+                print(f"Failed to delete: {delete_response.text}")
+
+    print(f"\n{total_deleted} old emails deleted")
 
 def classify_email(client, email):
     # Extract the relevant fields from the email
@@ -99,7 +136,7 @@ def classify_email(client, email):
 - ACTION_REQUIRED: emails that require a reply or action from the user
 - IMPORTANT: rare high-priority emails (bank, doctor, family, work)
 - SPAM: useless notifications (LinkedIn, social media, marketing)
-- OTHER: anything that doesn't fit the above
+- OTHER: low importance receipts and anything that doesn't fit the above
 
 Email:
 From: {sender}
@@ -133,7 +170,7 @@ def get_or_create_folder(token, folder_name):
 
         for folder in folders:
             if folder["displayName"] == folder_name:
-                print(f"Folder '{folder_name}' already exists")
+                #print(f"Folder '{folder_name}' already exists")
                 return folder["id"]
 
         # Check if there's another page of folders
@@ -184,4 +221,9 @@ for email in emails:
     folder_id = folder_ids.get(category, folder_ids["OTHER"])
     move_email(token, email["id"], folder_id)
     print(f"✓ '{email['subject']}' → {category}")
+
+# Clean up old emails in low-priority folders
+categories_to_clean = ["SPAM", "NEWSLETTER", "ACCOUNT_ACTIVITY","OTHER"]
+delete_old_emails(token, folder_ids, categories_to_clean, weeks_old=8)
+
 print("Done!\n")

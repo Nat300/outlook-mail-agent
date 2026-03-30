@@ -14,15 +14,15 @@ Connect to Outlook → read emails → classify them with Claude → move them i
 
 ## Project Status
 
-Work in progress — just getting started
+Work in progress
 
 ---
 
 ## Learning Steps
 
 - [x] Set up GitHub repo and project structure
-- [ ] Connect to Outlook via Microsoft Graph API
-- [ ] Fetch emails from inbox
+- [x] Connect to Outlook via Microsoft Graph API
+- [x] Fetch emails from inbox
 - [ ] Classify emails using Claude
 - [ ] Move emails into folders based on classification
 - [ ] Schedule the agent to run automatically

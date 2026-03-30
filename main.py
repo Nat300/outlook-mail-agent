@@ -118,7 +118,51 @@ Respond with only the category name, nothing else."""
 
     return message.content[0].text.strip()
 
+def get_or_create_folder(token, folder_name):
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
 
+    # Fetch all folders, handling pagination
+    url = "https://graph.microsoft.com/v1.0/me/mailFolders"
+    while url:
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        folders = data.get("value", [])
+
+        for folder in folders:
+            if folder["displayName"] == folder_name:
+                print(f"Folder '{folder_name}' already exists")
+                return folder["id"]
+
+        # Check if there's another page of folders
+        url = data.get("@odata.nextLink")
+
+    # Folder not found in any page — create it
+    url = "https://graph.microsoft.com/v1.0/me/mailFolders"
+    response = requests.post(url, headers=headers, json={"displayName": folder_name})
+
+    if response.status_code == 201:
+        print(f"Folder '{folder_name}' created")
+        return response.json()["id"]
+    else:
+        raise Exception(f"Failed to create folder: {response.text}")
+    
+def move_email(token, email_id, folder_id):
+    url = f"https://graph.microsoft.com/v1.0/me/messages/{email_id}/move"
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    response = requests.post(url, headers=headers, json={"destinationId": folder_id})
+    
+    if response.status_code == 201:
+        return True
+    else:
+        raise Exception(f"Failed to move email: {response.text}")
 
 # Initialize the Anthropic client
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -127,8 +171,17 @@ client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 token = get_access_token()
 emails = get_emails(token)
 
-# Classify each email
+# Create folders for each category
+categories = ["ACCOUNT_ACTIVITY", "NEWSLETTER", "ACTION_REQUIRED", "IMPORTANT", "SPAM", "OTHER"]
+folder_ids = {}
+for category in categories:
+    folder_ids[category] = get_or_create_folder(token, category)
+print("All folders ready!\n")
+
+# Move emails to corresponding folder
 for email in emails:
     category = classify_email(client, email)
-    print(f"\nSubject: {email['subject']}")
-    print(f"Category: {category}")
+    folder_id = folder_ids.get(category, folder_ids["OTHER"])
+    move_email(token, email["id"], folder_id)
+    print(f"✓ '{email['subject']}' → {category}")
+print("Done!\n")

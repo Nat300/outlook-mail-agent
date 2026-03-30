@@ -93,12 +93,13 @@ def classify_email(client, email):
 
     # Build the prompt
     prompt = f"""You are an email classifier. Classify the following email into exactly one of these categories:
-- SPAM
-- NEWSLETTER
-- ACTION_REQUIRED 
-- IMPORTANT
-- ALERTS
-- OTHER
+
+- ACCOUNT_ACTIVITY: account login notifications, security alerts, 2FA codes, confirmations, account activity
+- NEWSLETTER: subscribed content, gym updates, blogs, recurring promotional emails
+- ACTION_REQUIRED: emails that require a reply or action from the user
+- IMPORTANT: rare high-priority emails (bank, doctor, family, work)
+- SPAM: useless notifications (LinkedIn, social media, marketing)
+- OTHER: anything that doesn't fit the above
 
 Email:
 From: {sender}
